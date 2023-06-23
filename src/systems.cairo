@@ -3,70 +3,116 @@ mod Spawn {
     use array::ArrayTrait;
     use traits::Into;
 
-    use dojo_examples::components::Position;
-    use dojo_examples::components::Moves;
+    use dojo_examples::components::Rectangle;
 
-    // note: ignore linting of Context and commands
     fn execute(ctx: Context) {
         let player = commands::set_entity(
-            ctx.caller_account.into(), (Moves { remaining: 10 }, Position { x: 0, y: 0 }, )
+            ctx.caller_account.into(), (Rectangle { height: 20, width: 6 }, )
         );
         return ();
     }
 }
 
 #[system]
-mod Move {
+mod Tetris {
     use array::ArrayTrait;
     use traits::Into;
 
     use dojo_examples::components::Position;
-    use dojo_examples::components::Moves;
+    use dojo_examples::components::Rectangle;
 
-
-    #[derive(Serde, Drop)]
-    enum Direction {
-        Left: (),
-        Right: (),
-        Up: (),
-        Down: (),
-    }
-
-    impl DirectionIntoFelt252 of Into<Direction, felt252> {
-        fn into(self: Direction) -> felt252 {
-            match self {
-                Direction::Left(()) => 0,
-                Direction::Right(()) => 1,
-                Direction::Up(()) => 2,
-                Direction::Down(()) => 3,
+    fn initialize_grid(width: u8, height: u8) -> Array<u8> {
+        let mut grid = ArrayTrait::<u8>::new();
+        let mut h: u8 = 0;
+        loop {
+            if h >= height {
+                break ();
             }
-        }
+            if h < height {
+                let mut w: u8 = 0;
+                loop {
+                    if w >= width {
+                        break ();
+                    }
+                    if w < width {
+                        grid.append(0);
+                    }
+                    w += 1;
+                };
+            }
+            h += 1;
+        };
+        return grid;
     }
 
-    // note: ignore linting of Context and commands
-    fn execute(ctx: Context, direction: Direction) {
-        let (position, moves) = commands::<Position, Moves>::entity(ctx.caller_account.into());
-        let next = next_position(position, direction);
+    fn update_grid(grid: Array<u8>) -> Array<u8> {
+        // TODO
+        grid
+    }
+
+    fn check_full_line(grid: Array<u8>, width: u8, height: u8) -> bool {
+        let mut full = true;
+        let mut w = 0;
+        loop {
+            if w >= width {
+                break ();
+            }
+            if w < width {
+                let idx: u32 = height.into() * width.into() + w.into();
+                if *grid.at(idx) == 0 {
+                    full = false;
+                }
+            }
+            w += 1;
+        };
+        return full;
+    }
+
+    fn execute(ctx: Context) {
+        let box = commands::<Rectangle>::entity(ctx.caller_account.into());
+        let grid = initialize_grid(box.height, box.width);
         let uh = commands::set_entity(
             ctx.caller_account.into(),
-            (Moves { remaining: moves.remaining - 1 }, Position { x: next.x, y: next.y }, )
+            (grid), 
         );
         return ();
     }
+}
 
-    fn next_position(position: Position, direction: Direction) -> Position {
-        match direction {
-            Direction::Left(()) => {
-                Position { x: position.x - 1, y: position.y }
+#[system]
+mod StartingPosition {
+    use array::ArrayTrait;
+    use traits::Into;
+
+    use dojo_examples::components::Shape;
+    use dojo_examples::components::ShapePosition;
+    use dojo_examples::components::Orientation;
+    use dojo_examples::components::Coordinates;
+
+    fn generate_starting_coordinates(shape: Shape, orientation: Orientation) -> ShapePosition {
+        match shape {
+            // A square has `(width - 1)` options of starting placement, independent of orientation
+            // The default starting position is the top left corner
+            Shape::Square(()) => {
+                Coordinates::square_default()
             },
-            Direction::Right(()) => {
-                Position { x: position.x + 1, y: position.y }
-            },
-            Direction::Up(()) => {
-                Position { x: position.x, y: position.y - 1 }
-            },
-            Direction::Down(()) => {
-                Position { x: position.x, y: position.y + 1 }
+            // A horizontal line has `(width - 3)` options of starting placement
+            // A vertical line has `width` options of starting placement
+            Shape::Line(()) => {
+                match orientation {
+                    Orientation::North(()) => {
+                        Coordinates::line_north_default()
+                    },
+                    Orientation::East(()) => {
+                        Coordinates::line_east_default()
+                    },
+                    Orientation::South(()) => {
+                        Coordinates::line_north_default()
+                    },
+                    Orientation::West(()) => {
+                        Coordinates::line_east_default()
+                    },
+                }
             },
         }
     }
